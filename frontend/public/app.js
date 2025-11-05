@@ -1,8 +1,17 @@
 // Configuration
-// Use the server IP for remote access, or localhost for local development
-const API_BASE_URL = window.location.hostname === 'localhost'
-    ? 'http://localhost:8000'
-    : 'http://21.0.0.158:8000';
+// Auto-detect API base URL based on environment
+const API_BASE_URL = (() => {
+    // If running on Render or production
+    if (window.location.hostname.includes('onrender.com')) {
+        return 'https://project-handler-api.onrender.com';
+    }
+    // If localhost
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return 'http://localhost:8000';
+    }
+    // Otherwise use relative or current host with port 8000
+    return `http://${window.location.hostname}:8000`;
+})();
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
