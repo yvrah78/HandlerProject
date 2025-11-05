@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Handler - Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <div class="logo">
+                <h2>📦 Project Handler</h2>
+                <p class="version">v0.1.0</p>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="#" data-page="dashboard" class="nav-link active">🏠 Dashboard</a></li>
+                <li><a href="#" data-page="bookings" class="nav-link">📋 Bookings</a></li>
+                <li><a href="#" data-page="customers" class="nav-link">👥 Clientes</a></li>
+                <li><a href="#" data-page="agents" class="nav-link">🤖 Agentes</a></li>
+                <li><a href="#" data-page="api" class="nav-link">🔌 API Docs</a></li>
+            </ul>
+            <div class="sidebar-footer">
+                <div class="status-indicator">
+                    <span class="status-dot" id="apiStatus"></span>
+                    <span id="apiStatusText">Verificando...</span>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="header">
+                <h1 id="pageTitle">Dashboard</h1>
+                <div class="header-actions">
+                    <button class="btn btn-refresh" onclick="refreshPage()">🔄 Actualizar</button>
+                </div>
+            </header>
+
+            <div class="content" id="content">
+                <!-- Dashboard Page -->
+                <div id="dashboard-page" class="page active">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon">📊</div>
+                            <div class="stat-info">
+                                <h3 id="totalBookings">-</h3>
+                                <p>Total Bookings</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">👥</div>
+                            <div class="stat-info">
+                                <h3 id="totalCustomers">-</h3>
+                                <p>Clientes</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">💰</div>
+                            <div class="stat-info">
+                                <h3 id="totalInvoices">-</h3>
+                                <p>Facturas</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">🤖</div>
+                            <div class="stat-info">
+                                <h3 id="activeAgents">5</h3>
+                                <p>Agentes Activos</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="section">
+                        <h2>📌 Información del Sistema</h2>
+                        <div class="info-card" id="systemInfo">
+                            <p>Cargando información del sistema...</p>
+                        </div>
+                    </div>
+
+                    <div class="section">
+                        <h2>🔧 Quick Actions</h2>
+                        <div class="actions-grid">
+                            <button class="action-btn" onclick="showPage('bookings')">
+                                <span class="action-icon">➕</span>
+                                <span>Nuevo Booking</span>
+                            </button>
+                            <button class="action-btn" onclick="showPage('customers')">
+                                <span class="action-icon">👤</span>
+                                <span>Nuevo Cliente</span>
+                            </button>
+                            <button class="action-btn" onclick="testAgent('coordinator')">
+                                <span class="action-icon">🤖</span>
+                                <span>Probar Agentes</span>
+                            </button>
+                            <button class="action-btn" onclick="window.open('http://localhost:8000/docs', '_blank')">
+                                <span class="action-icon">📖</span>
+                                <span>API Docs</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bookings Page -->
+                <div id="bookings-page" class="page">
+                    <div class="section">
+                        <h2>📋 Gestión de Bookings</h2>
+                        <p class="subtitle">Gestiona las reservas de transporte</p>
+
+                        <div class="form-card">
+                            <h3>Crear Nuevo Booking</h3>
+                            <form id="bookingForm">
+                                <div class="form-group">
+                                    <label>ID Cliente</label>
+                                    <input type="number" id="booking_customer_id" placeholder="1" required>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Origen</label>
+                                        <input type="text" id="booking_origin" placeholder="123 Main St, City" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Destino</label>
+                                        <input type="text" id="booking_destination" placeholder="456 Oak Ave, City" required>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Fecha/Hora Recogida</label>
+                                        <input type="datetime-local" id="booking_pickup" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Peso (kg)</label>
+                                        <input type="number" id="booking_weight" placeholder="500" step="0.1">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label>Descripción de Carga</label>
+                                    <textarea id="booking_description" rows="3" placeholder="Descripción del cargo..."></textarea>
+                                </div>
+                                <button type="submit" class="btn btn-primary">Crear Booking</button>
+                            </form>
+                        </div>
+
+                        <div class="table-card">
+                            <h3>Bookings Recientes (Demo)</h3>
+                            <div id="bookingsList">
+                                <p class="text-muted">Los bookings aparecerán aquí cuando se implementen los endpoints de listado.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Customers Page -->
+                <div id="customers-page" class="page">
+                    <div class="section">
+                        <h2>👥 Gestión de Clientes</h2>
+                        <p class="subtitle">Administra tu base de clientes</p>
+
+                        <div class="form-card">
+                            <h3>Crear Nuevo Cliente</h3>
+                            <form id="customerForm">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Nombre Completo</label>
+                                        <input type="text" id="customer_name" placeholder="Juan Pérez" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Email</label>
+                                        <input type="email" id="customer_email" placeholder="juan@example.com" required>
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>Teléfono</label>
+                                        <input type="tel" id="customer_phone" placeholder="+1234567890" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Empresa (opcional)</label>
+                                        <input type="text" id="customer_company" placeholder="Mi Empresa S.A.">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label>Dirección</label>
+                                    <input type="text" id="customer_address" placeholder="Calle Principal 123, Ciudad">
+                                </div>
+                                <button type="submit" class="btn btn-primary">Crear Cliente</button>
+                            </form>
+                        </div>
+
+                        <div class="table-card">
+                            <h3>Lista de Clientes (Demo)</h3>
+                            <div id="customersList">
+                                <p class="text-muted">Los clientes aparecerán aquí cuando se implementen los endpoints de listado.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Agents Page -->
+                <div id="agents-page" class="page">
+                    <div class="section">
+                        <h2>🤖 Sistema Multi-Agente</h2>
+                        <p class="subtitle">Estado y pruebas de los agentes inteligentes</p>
+
+                        <div class="agents-grid">
+                            <div class="agent-card">
+                                <div class="agent-header">
+                                    <span class="agent-icon">🎯</span>
+                                    <h3>Coordinator Agent</h3>
+                                </div>
+                                <p>Orquesta y delega tareas a los agentes especializados</p>
+                                <button class="btn btn-small" onclick="testAgent('coordinator')">Probar Agente</button>
+                            </div>
+
+                            <div class="agent-card">
+                                <div class="agent-header">
+                                    <span class="agent-icon">📞</span>
+                                    <h3>Communications Agent</h3>
+                                </div>
+                                <p>Gestiona llamadas, SMS y emails (Twilio/SendGrid)</p>
+                                <button class="btn btn-small" onclick="testAgent('communications')">Probar Agente</button>
+                            </div>
+
+                            <div class="agent-card">
+                                <div class="agent-header">
+                                    <span class="agent-icon">💰</span>
+                                    <h3>Financial Agent</h3>
+                                </div>
+                                <p>Maneja cotizaciones, facturas y pagos (Stripe)</p>
+                                <button class="btn btn-small" onclick="testAgent('financial')">Probar Agente</button>
+                            </div>
+
+                            <div class="agent-card">
+                                <div class="agent-header">
+                                    <span class="agent-icon">🚛</span>
+                                    <h3>Operations Agent</h3>
+                                </div>
+                                <p>Planifica rutas y gestiona la flota (Google Maps)</p>
+                                <button class="btn btn-small" onclick="testAgent('operations')">Probar Agente</button>
+                            </div>
+
+                            <div class="agent-card">
+                                <div class="agent-header">
+                                    <span class="agent-icon">📊</span>
+                                    <h3>Analytics Agent</h3>
+                                </div>
+                                <p>Genera métricas, reportes y análisis predictivo</p>
+                                <button class="btn btn-small" onclick="testAgent('analytics')">Probar Agente</button>
+                            </div>
+                        </div>
+
+                        <div class="test-output" id="agentTestOutput" style="display: none;">
+                            <h3>Resultado del Test</h3>
+                            <pre id="agentTestResult"></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- API Page -->
+                <div id="api-page" class="page">
+                    <div class="section">
+                        <h2>🔌 Documentación de la API</h2>
+                        <p class="subtitle">Explora y prueba los endpoints disponibles</p>
+
+                        <div class="api-links">
+                            <a href="http://localhost:8000/docs" target="_blank" class="api-link-card">
+                                <div class="api-link-icon">📖</div>
+                                <div>
+                                    <h3>Swagger UI</h3>
+                                    <p>Documentación interactiva con pruebas</p>
+                                </div>
+                            </a>
+                            <a href="http://localhost:8000/redoc" target="_blank" class="api-link-card">
+                                <div class="api-link-icon">📄</div>
+                                <div>
+                                    <h3>ReDoc</h3>
+                                    <p>Documentación alternativa limpia</p>
+                                </div>
+                            </a>
+                        </div>
+
+                        <div class="endpoints-list">
+                            <h3>Endpoints Disponibles</h3>
+                            <div class="endpoint-item">
+                                <span class="method get">GET</span>
+                                <code>/</code>
+                                <span class="endpoint-desc">Información de la API</span>
+                            </div>
+                            <div class="endpoint-item">
+                                <span class="method get">GET</span>
+                                <code>/info</code>
+                                <span class="endpoint-desc">Información del sistema</span>
+                            </div>
+                            <div class="endpoint-item">
+                                <span class="method get">GET</span>
+                                <code>/api/v1/health</code>
+                                <span class="endpoint-desc">Health check</span>
+                            </div>
+                            <div class="endpoint-item">
+                                <span class="method get">GET</span>
+                                <code>/api/v1/health/ready</code>
+                                <span class="endpoint-desc">Readiness check</span>
+                            </div>
+                            <div class="endpoint-item">
+                                <span class="method get">GET</span>
+                                <code>/api/v1/health/live</code>
+                                <span class="endpoint-desc">Liveness check</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
