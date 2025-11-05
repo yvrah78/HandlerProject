@@ -1,0 +1,23 @@
+{
+  "name": "project-handler",
+  "version": "0.1.0",
+  "description": "Multi-Agent Transportation Management System",
+  "private": true,
+  "scripts": {
+    "dev": "echo 'Frontend development will be added in future modules'",
+    "build": "echo 'Frontend build will be added in future modules'",
+    "test": "echo 'Frontend tests will be added in future modules'"
+  },
+  "keywords": [
+    "transportation",
+    "automation",
+    "multi-agent",
+    "ai"
+  ],
+  "author": "Project Handler Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}
