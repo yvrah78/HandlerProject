@@ -26,6 +26,13 @@ def run_server(port=3000):
     public_dir = os.path.join(os.path.dirname(__file__), 'public')
     os.chdir(public_dir)
 
+    # Get local IP
+    import subprocess
+    try:
+        local_ip = subprocess.check_output(['hostname', '-I']).decode().strip().split()[0]
+    except:
+        local_ip = '127.0.0.1'
+
     server_address = ('', port)
     httpd = HTTPServer(server_address, CORSRequestHandler)
 
@@ -36,12 +43,14 @@ def run_server(port=3000):
 
 ✅ Frontend server running at:
 
-   🌐 http://localhost:{port}
+   🖥️  Local:   http://localhost:{port}
+   📱 Remote:  http://{local_ip}:{port}
 
 📝 Instructions:
-   1. Make sure the API is running at http://localhost:8000
-   2. Open http://localhost:{port} in your browser
-   3. Explore the dashboard and test the system
+   1. Make sure the API is running at http://{local_ip}:8000
+   2. Open the URL in your browser
+   3. For iPad/mobile: use the Remote URL
+   4. Explore the dashboard and test the system
 
 🛑 Press Ctrl+C to stop the server
 

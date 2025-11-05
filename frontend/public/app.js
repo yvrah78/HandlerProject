@@ -1,5 +1,8 @@
 // Configuration
-const API_BASE_URL = 'http://localhost:8000';
+// Use the server IP for remote access, or localhost for local development
+const API_BASE_URL = window.location.hostname === 'localhost'
+    ? 'http://localhost:8000'
+    : 'http://21.0.0.158:8000';
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
