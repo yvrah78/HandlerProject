@@ -7,7 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from src.core.config import get_settings
 from src.core.logging import get_logger
-from src.api.routes import health
+from src.core.database import init_db
+from src.api.routes import health, auth
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -22,6 +23,14 @@ async def lifespan(app: FastAPI):
     logger.info("Starting Project Handler API...")
     logger.info(f"Environment: {settings.environment}")
     logger.info(f"Debug mode: {settings.debug}")
+
+    # Initialize database tables
+    try:
+        init_db()
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+
     yield
     # Shutdown
     logger.info("Shutting down Project Handler API...")
@@ -47,6 +56,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(health.router, prefix="/api/v1", tags=["health"])
+app.include_router(auth.router, prefix="/api/v1", tags=["authentication"])
 
 
 @app.get("/")
