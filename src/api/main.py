@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from src.core.config import get_settings
 from src.core.logging import get_logger
 from src.core.database import init_db
-from src.api.routes import health, auth
+from src.api.routes import health, auth, customers, bookings
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -57,6 +57,8 @@ app.add_middleware(
 # Include routers
 app.include_router(health.router, prefix="/api/v1", tags=["health"])
 app.include_router(auth.router, prefix="/api/v1", tags=["authentication"])
+app.include_router(customers.router, prefix="/api/v1", tags=["customers"])
+app.include_router(bookings.router, prefix="/api/v1", tags=["bookings"])
 
 
 @app.get("/")
