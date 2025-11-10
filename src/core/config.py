@@ -14,9 +14,14 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     twilio_account_sid: str = ""
     twilio_auth_token: str = ""
+    twilio_phone_number: str = ""
     sendgrid_api_key: str = ""
+    sendgrid_from_email: str = ""
     stripe_secret_key: str = ""
     google_maps_api_key: str = ""
+    whatsapp_api_token: str = ""
+    whatsapp_phone_number_id: str = ""
+    whatsapp_business_account_id: str = ""
 
     # Database Configuration
     database_url: str = "postgresql://admin:secure_password@localhost:5432/project_handler"
