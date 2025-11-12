@@ -2,6 +2,33 @@
 
 **Multi-Agent Transportation Management System**
 
+---
+
+## 🚀 START HERE - New Development Session
+
+**Current Branch:** `claude/instant-quote-system-011CV2iNEUehBWLcFEXoJxC1`
+**Project Status:** 70% Complete (10/15 modules)
+
+### Quick Start Instructions
+
+```bash
+# 1. Checkout to the current development branch
+git fetch origin
+git checkout claude/instant-quote-system-011CV2iNEUehBWLcFEXoJxC1
+
+# 2. Read the project status document
+# This file contains ALL project information and next steps
+cat PROJECT-STATUS.md
+```
+
+**📋 PROJECT-STATUS.md** is the single source of truth for:
+- Current progress (70%)
+- What's been completed (Quote system + Operating costs)
+- What's next (Complete F4 API endpoints)
+- All technical details
+
+---
+
 Project Handler is an advanced AI-powered automation system designed for transportation operations. It leverages multi-agent architecture to handle complex logistics workflows including customer communications, financial operations, route optimization, and analytics.
 
 ## Overview
