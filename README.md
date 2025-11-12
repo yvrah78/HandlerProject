@@ -6,17 +6,21 @@
 
 ## 🚀 START HERE - New Development Session
 
-**Current Branch:** `claude/instant-quote-system-011CV2iNEUehBWLcFEXoJxC1`
 **Project Status:** 70% Complete (10/15 modules)
 
 ### Quick Start Instructions
 
 ```bash
-# 1. Checkout to the current development branch
+# 1. Find and checkout to the branch with PROJECT-STATUS.md
+# Look for branches with "quote" or "instant" in the name (most recent work)
 git fetch origin
-git checkout claude/instant-quote-system-011CV2iNEUehBWLcFEXoJxC1
+git branch -r | grep claude
 
-# 2. Read the project status document
+# 2. Checkout to the most recent development branch
+# (Usually the one with "instant-quote-system" or similar)
+git checkout <branch-name>
+
+# 3. Read the project status document
 # This file contains ALL project information and next steps
 cat PROJECT-STATUS.md
 ```
@@ -26,6 +30,8 @@ cat PROJECT-STATUS.md
 - What's been completed (Quote system + Operating costs)
 - What's next (Complete F4 API endpoints)
 - All technical details
+
+**Note:** If PROJECT-STATUS.md doesn't exist in current branch, checkout to the branch that contains it (look for branches with latest commits related to quotes or recent features).
 
 ---
 
