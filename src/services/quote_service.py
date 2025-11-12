@@ -11,7 +11,9 @@ from src.core.logging import get_logger
 from src.core.exceptions import ValidationError, IntegrationError
 from src.models.quote import Quote, QuoteStatus
 from src.models.customer import Customer
+from src.models.vehicle import Vehicle
 from src.services.pricing_service import PricingService
+from src.services.vehicle_operating_cost_service import VehicleOperatingCostService
 from src.integrations.google_maps_client import GoogleMapsClient
 
 logger = get_logger(__name__)
@@ -41,6 +43,7 @@ class QuoteService:
         """
         self.db = db
         self.pricing_service = PricingService()
+        self.vehicle_cost_service = VehicleOperatingCostService(db)
         self.maps_client = GoogleMapsClient()
         self.logger = logger
         self.logger.info("QuoteService initialized")
@@ -58,7 +61,9 @@ class QuoteService:
         scheduled_datetime: Optional[datetime] = None,
         cargo_description: Optional[str] = None,
         special_requirements: Optional[str] = None,
-        promo_code: Optional[str] = None
+        promo_code: Optional[str] = None,
+        vehicle_id: Optional[int] = None,  # For internal cost calculation
+        calculate_internal_costs: bool = False  # Only for internal use
     ) -> Dict[str, Any]:
         """
         Generate an instant quote for transportation service.
@@ -158,6 +163,42 @@ class QuoteService:
         # 4. Generate quote number
         quote_number = self._generate_quote_number()
 
+        # 4.5. Calculate internal operating costs (if requested and vehicle specified)
+        # NOTE: These costs are for INTERNAL use only and NOT shown to customer
+        internal_costs = None
+        profit_margin = None
+        profit_margin_percent = None
+
+        if calculate_internal_costs and vehicle_id:
+            try:
+                self.logger.info(f"Calculating internal operating costs for vehicle {vehicle_id}")
+
+                # Calculate vehicle operating costs
+                operating_cost_result = self.vehicle_cost_service.calculate_operating_cost(
+                    vehicle_id=vehicle_id,
+                    distance_km=distance_km,
+                    duration_minutes=duration_minutes,
+                    toll_cost=0.0,  # TODO: Get tolls from Google Maps
+                    traffic_level="normal"  # TODO: Get from Google Maps traffic data
+                )
+
+                internal_costs = operating_cost_result
+
+                # Calculate profit margin
+                total_customer_price = price_breakdown["total_amount"]
+                total_operating_cost = operating_cost_result["total_operating_cost"]
+                profit_margin = total_customer_price - total_operating_cost
+                profit_margin_percent = (profit_margin / total_customer_price * 100) if total_customer_price > 0 else 0
+
+                self.logger.info(
+                    f"Internal costs calculated: Operating=${total_operating_cost:.2f}, "
+                    f"Revenue=${total_customer_price:.2f}, Profit=${profit_margin:.2f} ({profit_margin_percent:.1f}%)"
+                )
+
+            except Exception as e:
+                self.logger.warning(f"Failed to calculate internal costs: {str(e)}")
+                # Don't fail the quote creation if internal cost calculation fails
+
         # 5. Create Quote in database
         valid_until = datetime.utcnow() + timedelta(hours=self.QUOTE_VALIDITY_HOURS)
 
@@ -177,6 +218,12 @@ class QuoteService:
             tax_amount=price_breakdown["tax_amount"],
             total_amount=price_breakdown["total_amount"],
             pricing_details=price_breakdown,  # Store full breakdown as JSON
+            # Internal costs (NOT shown to customer)
+            vehicle_id=vehicle_id if calculate_internal_costs else None,
+            internal_operating_costs=internal_costs,
+            profit_margin=profit_margin,
+            profit_margin_percent=profit_margin_percent,
+            # Service details
             cargo_description=cargo_description,
             special_requirements=special_requirements,
             status=QuoteStatus.DRAFT,

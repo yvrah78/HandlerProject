@@ -345,3 +345,198 @@ async def get_pricing_info():
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve pricing information"
         )
+
+
+# ==================================================================================
+# INTERNAL/ADMIN ENDPOINTS - NOT FOR PUBLIC USE
+# These endpoints expose internal operating costs and profit margins
+# ==================================================================================
+
+@router.get("/{quote_id}/internal", tags=["quotes-internal"])
+async def get_quote_internal_costs(
+    quote_id: int,
+    db: Session = Depends(get_db)
+    # TODO: Add admin authentication dependency when RBAC is implemented
+    # current_user: User = Depends(get_current_admin_user)
+):
+    """
+    **[INTERNAL USE ONLY]** Get internal operating costs and profit analysis for a quote.
+
+    This endpoint exposes:
+    - Vehicle operating costs (fuel, maintenance, depreciation, etc.)
+    - Profit margins
+    - Cost breakdown
+
+    **This information should NEVER be shown to customers.**
+
+    **Authentication:** Requires admin role (TODO: implement)
+    """
+    try:
+        from src.models.quote import Quote
+
+        quote = db.query(Quote).filter(Quote.id == quote_id).first()
+        if not quote:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Quote {quote_id} not found"
+            )
+
+        # Build internal cost response
+        response = {
+            "quote_id": quote.id,
+            "quote_number": quote.quote_number,
+            "customer_id": quote.customer_id,
+
+            # Customer pricing (what they pay)
+            "customer_price": {
+                "subtotal": quote.subtotal,
+                "tax": quote.tax_amount,
+                "total": quote.total_amount,
+                "currency": "USD"
+            },
+
+            # Internal operating costs
+            "has_internal_costs": quote.internal_operating_costs is not None,
+            "vehicle_id": quote.vehicle_id,
+            "internal_operating_costs": quote.internal_operating_costs,
+
+            # Profit analysis
+            "profit_margin": quote.profit_margin,
+            "profit_margin_percent": quote.profit_margin_percent,
+
+            # Service details
+            "distance_km": quote.distance_km,
+            "duration_minutes": quote.estimated_duration_minutes,
+
+            "created_at": quote.created_at.isoformat() if quote.created_at else None
+        }
+
+        logger.info(f"Internal costs retrieved for quote {quote_id} (ADMIN ACCESS)")
+        return response
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving internal costs for quote {quote_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve internal costs"
+        )
+
+
+@router.get("/analytics/profitability", tags=["quotes-internal"])
+async def get_profitability_analytics(
+    days: int = 30,
+    min_profit_margin_percent: Optional[float] = None,
+    db: Session = Depends(get_db)
+    # TODO: Add admin authentication dependency
+    # current_user: User = Depends(get_current_admin_user)
+):
+    """
+    **[INTERNAL USE ONLY]** Get profitability analytics for quotes.
+
+    Analyzes profit margins across all quotes with internal cost data.
+
+    Args:
+        days: Number of days to analyze (default: 30)
+        min_profit_margin_percent: Filter quotes with margin below this (optional)
+
+    Returns:
+        Profitability statistics and breakdown
+
+    **Authentication:** Requires admin role (TODO: implement)
+    """
+    try:
+        from src.models.quote import Quote
+        from datetime import datetime, timedelta
+        from sqlalchemy import func
+
+        # Calculate date range
+        start_date = datetime.utcnow() - timedelta(days=days)
+
+        # Query quotes with internal costs
+        query = db.query(Quote).filter(
+            Quote.internal_operating_costs.isnot(None),
+            Quote.created_at >= start_date
+        )
+
+        if min_profit_margin_percent is not None:
+            query = query.filter(Quote.profit_margin_percent >= min_profit_margin_percent)
+
+        quotes = query.all()
+
+        if not quotes:
+            return {
+                "message": "No quotes with internal cost data found in this period",
+                "days_analyzed": days,
+                "total_quotes": 0
+            }
+
+        # Calculate statistics
+        total_revenue = sum(q.total_amount for q in quotes)
+        total_operating_costs = sum(
+            q.internal_operating_costs.get("total_operating_cost", 0)
+            for q in quotes if q.internal_operating_costs
+        )
+        total_profit = sum(q.profit_margin or 0 for q in quotes)
+        avg_profit_margin_percent = sum(q.profit_margin_percent or 0 for q in quotes) / len(quotes)
+
+        # Find best and worst performing quotes
+        best_quote = max(quotes, key=lambda q: q.profit_margin or 0)
+        worst_quote = min(quotes, key=lambda q: q.profit_margin or 0)
+
+        # Breakdown by vehicle
+        vehicle_stats = {}
+        for quote in quotes:
+            if quote.vehicle_id:
+                if quote.vehicle_id not in vehicle_stats:
+                    vehicle_stats[quote.vehicle_id] = {
+                        "vehicle_id": quote.vehicle_id,
+                        "quotes_count": 0,
+                        "total_revenue": 0,
+                        "total_profit": 0,
+                        "total_distance_km": 0
+                    }
+                vehicle_stats[quote.vehicle_id]["quotes_count"] += 1
+                vehicle_stats[quote.vehicle_id]["total_revenue"] += quote.total_amount
+                vehicle_stats[quote.vehicle_id]["total_profit"] += (quote.profit_margin or 0)
+                vehicle_stats[quote.vehicle_id]["total_distance_km"] += (quote.distance_km or 0)
+
+        logger.info(f"Profitability analytics generated for {len(quotes)} quotes (ADMIN ACCESS)")
+
+        return {
+            "period": {
+                "days": days,
+                "start_date": start_date.isoformat(),
+                "end_date": datetime.utcnow().isoformat()
+            },
+            "summary": {
+                "total_quotes": len(quotes),
+                "total_revenue": round(total_revenue, 2),
+                "total_operating_costs": round(total_operating_costs, 2),
+                "total_profit": round(total_profit, 2),
+                "avg_profit_margin_percent": round(avg_profit_margin_percent, 2),
+                "overall_profit_margin_percent": round((total_profit / total_revenue * 100), 2) if total_revenue > 0 else 0
+            },
+            "best_quote": {
+                "quote_id": best_quote.id,
+                "quote_number": best_quote.quote_number,
+                "profit": round(best_quote.profit_margin or 0, 2),
+                "profit_percent": round(best_quote.profit_margin_percent or 0, 2)
+            },
+            "worst_quote": {
+                "quote_id": worst_quote.id,
+                "quote_number": worst_quote.quote_number,
+                "profit": round(worst_quote.profit_margin or 0, 2),
+                "profit_percent": round(worst_quote.profit_margin_percent or 0, 2)
+            },
+            "by_vehicle": list(vehicle_stats.values()),
+            "currency": "USD"
+        }
+
+    except Exception as e:
+        logger.error(f"Error generating profitability analytics: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to generate analytics"
+        )

@@ -46,8 +46,14 @@ class Quote(Base):
     tax_amount = Column(Float, nullable=False, default=0.0)
     total_amount = Column(Float, nullable=False)
 
-    # Pricing details (JSON)
+    # Pricing details (JSON) - shown to customer
     pricing_details = Column(JSON, nullable=True)
+
+    # Internal operating costs (JSON) - NOT shown to customer, for internal analysis only
+    vehicle_id = Column(Integer, ForeignKey("vehicles.id"), nullable=True)
+    internal_operating_costs = Column(JSON, nullable=True)  # Vehicle operating costs
+    profit_margin = Column(Float, nullable=True)  # Calculated: total_amount - operating_costs
+    profit_margin_percent = Column(Float, nullable=True)  # (profit / total_amount) * 100
 
     # Service details
     cargo_description = Column(String(1000), nullable=True)
@@ -69,6 +75,7 @@ class Quote(Base):
     # Relationships
     customer = relationship("Customer", back_populates="quotes")
     service = relationship("Service", backref="quotes")
+    vehicle = relationship("Vehicle", backref="quotes")
 
     def __repr__(self):
         return f"<Quote(id={self.id}, number='{self.quote_number}', total={self.total_amount}, status='{self.status}')>"
