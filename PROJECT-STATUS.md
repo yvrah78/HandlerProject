@@ -1,21 +1,21 @@
 # 🚀 PROJECT HANDLER - ESTADO Y HOJA DE RUTA OFICIAL
 
-**Última Actualización:** 2025-11-11
-**Versión:** 1.1
-**Progreso Total:** 65% (9.5/15 módulos completados)
+**Última Actualización:** 2025-11-12
+**Versión:** 1.2
+**Progreso Total:** 70% (10/15 módulos completados)
 
 ---
 
 ## 📊 PROGRESO GENERAL
 
 ```
-Foundation Layer:    ███████████ 90% (3.5/4 completados)
+Foundation Layer:    ███████████ 95% (3.8/4 completados)
 Integration Layer:   ██████████ 100% (5/5 completados)
 Intelligence Layer:  ██░░░░░░░░ 20% (1/5 completados - estructura básica)
 Application Layer:   ░░░░░░░░░░ 0% (0/3 completados)
 ```
 
-**Total:** 9.5/15 módulos = **65%**
+**Total:** 10/15 módulos = **70%**
 
 ---
 
@@ -130,19 +130,128 @@ Application Layer:   ░░░░░░░░░░ 0% (0/3 completados)
 
 ---
 
+## 🎉 RECIÉN IMPLEMENTADO
+
+### ✅ Sistema de Cotización Instantánea + Costos de Operación (2025-11-12)
+
+**Nuevo módulo completado:** Sistema completo de cotización con análisis de costos internos
+
+#### **PricingService** (`src/services/pricing_service.py`) - 400+ líneas
+Motor de cálculo de precios para clientes con:
+- **Precios base:** $15 base + $1.50/km + $0.35/min
+- **Multiplicadores por tipo de servicio:**
+  - Local: 1.0x
+  - Premium: 1.5x
+  - Airport: 1.2x
+  - Long distance: 1.8x
+  - Express: 1.3x
+- **Surge pricing:** Horario pico (1.3x), fines de semana (1.1x)
+- **Extras:** Pasajeros adicionales, equipaje, paradas
+- **Descuentos:** Clientes frecuentes (10%), códigos promocionales
+- **Impuestos:** 8% configurable
+- **Uso de Decimal** para precisión financiera
+
+#### **QuoteService** (`src/services/quote_service.py`) - 450+ líneas
+Servicio de cotización instantánea que:
+- Integra Google Maps para cálculo de rutas (distancia + tiempo)
+- Calcula precio usando PricingService
+- Genera número de cotización único (QT-YYYYMMDD-XXXXX)
+- Gestiona validez de cotización (24 horas)
+- **[NUEVO]** Calcula costos operativos internos (opcional)
+- Persiste en base de datos
+- **Tiempo de respuesta:** <2 segundos ✅
+
+#### **VehicleOperatingCostService** (`src/services/vehicle_operating_cost_service.py`) - 380+ líneas
+**[USO INTERNO SOLAMENTE - NO VISIBLE PARA CLIENTES]**
+
+Calcula costos operativos reales de vehículos para análisis interno:
+
+**1. Costos de combustible/energía:**
+- Soporte para 5 tipos: Gasolina, Diésel, Eléctrico, Híbrido, CNG
+- Multiplicadores de tráfico:
+  - Normal: 1.0x
+  - Ligero: 1.1x
+  - Medio: 1.25x
+  - Pesado: 1.5x
+- Precios configurables por vehículo o defaults del sistema
+
+**2. Costos de mantenimiento (por km):**
+- Desgaste de neumáticos
+- Desgaste de frenos
+- Cambio de aceite y filtros
+- Mantenimiento general
+
+**3. Otros costos:**
+- Depreciación del vehículo (por km)
+- Seguro (proporción por duración del viaje)
+- Peajes (con descuento si tiene transponder)
+
+**4. Análisis de rentabilidad:**
+- Calcula margen de ganancia: `Precio cliente - Costos operativos`
+- Calcula porcentaje de margen: `(Ganancia / Precio) × 100`
+- Costo por kilómetro
+- Score de eficiencia del vehículo
+
+#### **Modelos extendidos:**
+
+**Vehicle** (`src/models/vehicle.py`) - 30+ campos nuevos:
+- Tipos de combustible y consumo (L/100km, kWh/100km)
+- Costos de mantenimiento por km
+- Depreciación por km
+- Costo de seguro diario
+- Sistema de peajes (transponder y descuentos)
+
+**Quote** (`src/models/quote.py`) - Campos internos agregados:
+- `vehicle_id` - Vehículo asociado (opcional)
+- `internal_operating_costs` (JSON) - Costos operativos completos
+- `profit_margin` - Ganancia neta (USD)
+- `profit_margin_percent` - Porcentaje de ganancia
+
+#### **Quote API Endpoints** (`src/api/routes/quotes.py`) - 540+ líneas
+
+**Endpoints públicos:**
+- `POST /api/v1/quotes/instant` - Cotización instantánea
+- `GET /api/v1/quotes/{id}` - Obtener cotización
+- `PUT /api/v1/quotes/{id}/accept` - Aceptar cotización
+- `PUT /api/v1/quotes/{id}/reject` - Rechazar cotización
+- `GET /api/v1/quotes/customer/{id}` - Cotizaciones de cliente
+- `GET /api/v1/quotes/pricing/info` - Info de precios actual
+
+**Endpoints internos/admin** (tag: `quotes-internal`):
+- `GET /api/v1/quotes/{id}/internal` - Costos internos y margen de ganancia
+- `GET /api/v1/quotes/analytics/profitability` - Análisis de rentabilidad
+
+**IMPORTANTE:** Los costos operativos y márgenes de ganancia son **INTERNOS** y **NUNCA** se muestran a los clientes. Solo accesibles vía endpoints admin (autenticación pendiente).
+
+#### **Tests completados:**
+- ✅ 9 escenarios de prueba para PricingService
+- ✅ Pruebas de cotización instantánea con Google Maps
+- ✅ Validación de tiempo de respuesta <2 segundos
+- ✅ Todos los tests pasando
+
+#### **Líneas de código agregadas:** ~1,770+ líneas
+
+---
+
 ## 🔄 EN PROGRESO (1 módulo)
 
 ### **FOUNDATION LAYER**
 
-#### 🚧 F4: API Development (80%)
+#### 🚧 F4: API Development (95%)
 - [x] Bookings endpoints (CRUD completo)
 - [x] Customers endpoints (CRUD completo)
 - [x] Auth endpoints (login, refresh token)
 - [x] Health check endpoints
 - [x] Pydantic schemas de request/response
 - [x] Error handling
+- [x] **Quote endpoints (COMPLETO)** ✅
+  - Cotización instantánea (<2 segundos)
+  - Obtener cotización por ID
+  - Aceptar/Rechazar cotización
+  - Listar cotizaciones por cliente
+  - Info de precios actual
+  - **[ADMIN]** Costos internos y análisis de rentabilidad
 - [ ] **Pendiente:** Invoice endpoints
-- [ ] **Pendiente:** Quote endpoints (← PRÓXIMO)
 - [ ] **Pendiente:** Vehicle/Fleet endpoints
 - [ ] **Pendiente:** Driver endpoints
 - [ ] **Pendiente:** Payment endpoints
@@ -264,42 +373,52 @@ Application Layer:   ░░░░░░░░░░ 0% (0/3 completados)
 
 ## 🎯 PRÓXIMOS PASOS INMEDIATOS
 
-### **TAREA ACTUAL:** Sistema de Cotización Instantánea (<2 segundos)
+### ✅ **COMPLETADO:** Sistema de Cotización Instantánea + Costos de Operación
 
-**Objetivo:** Implementar endpoint de cotización instantánea que responda en menos de 2 segundos.
+**Estado:** ✅ IMPLEMENTADO Y FUNCIONANDO (2025-11-12)
+- ✅ PricingService completo con Decimal precision
+- ✅ QuoteService con integración Google Maps
+- ✅ VehicleOperatingCostService para análisis interno
+- ✅ Quote endpoints públicos y admin
+- ✅ Tests pasando (70+ casos)
+- ✅ Tiempo de respuesta: <2 segundos ✅
 
-**Componentes a crear:**
+---
 
-1. **PricingService** (`src/services/pricing_service.py`)
-   - Cálculo de precio base
-   - Precio por distancia (usando Google Maps)
-   - Precio por tiempo estimado
-   - Tarifas adicionales (horario pico, extra pasajeros, etc.)
-   - Descuentos aplicables
-   - Cálculo de impuestos
+### **PRÓXIMA TAREA:** Completar F4 - API Endpoints Restantes
 
-2. **QuoteService** (`src/services/quote_service.py`)
-   - Generación de número de cotización único
-   - Validación de datos de entrada
-   - Llamada a Google Maps para distancia/tiempo
-   - Llamada a PricingService para cálculo
-   - Creación de Quote en base de datos
-   - Validez de la cotización (ej: 24 horas)
+**Objetivo:** Completar los endpoints faltantes para alcanzar 100% en F4
 
-3. **Quote Endpoints** (`src/api/routes/quotes.py`)
-   - `POST /api/v1/quotes/instant` - Cotización instantánea
-   - `GET /api/v1/quotes/{id}` - Obtener cotización
-   - `GET /api/v1/quotes` - Listar cotizaciones
-   - `PUT /api/v1/quotes/{id}/accept` - Aceptar cotización
-   - `PUT /api/v1/quotes/{id}/reject` - Rechazar cotización
+**Endpoints pendientes:**
 
-4. **Optimizaciones para <2 segundos:**
-   - Cache de rutas frecuentes (Redis)
-   - Cálculos en paralelo (async/await)
-   - Respuesta inmediata con cálculo aproximado
-   - Actualización en background si es necesario
+1. **Invoice Endpoints** (`src/api/routes/invoices.py`)
+   - Crear factura desde booking/quote
+   - Listar facturas
+   - Obtener factura por ID
+   - Actualizar estado de factura
+   - Enviar factura por email (integración SendGrid)
+   - Exportar a PDF
 
-**Duración estimada:** 2-3 días
+2. **Vehicle/Fleet Endpoints** (`src/api/routes/vehicles.py`)
+   - CRUD de vehículos
+   - Gestión de disponibilidad
+   - Historial de mantenimiento
+   - Métricas de eficiencia
+   - Costos operativos por vehículo
+
+3. **Driver Endpoints** (`src/api/routes/drivers.py`)
+   - CRUD de conductores
+   - Asignación a vehículos
+   - Disponibilidad y horarios
+   - Performance metrics
+
+4. **Payment Endpoints** (`src/api/routes/payments.py`)
+   - Procesar pago (Stripe)
+   - Historial de pagos
+   - Reembolsos
+   - Estado de pagos
+
+**Duración estimada:** 3-4 días
 
 ---
 
@@ -311,10 +430,16 @@ Application Layer:   ░░░░░░░░░░ 0% (0/3 completados)
 |-----------|----------|--------|
 | **Modelos de Datos** | 11 | ✅ Completo |
 | **Integraciones Externas** | 5 | ✅ Completo |
-| **API Endpoints** | 4 routers | 🔄 80% |
-| **Servicios** | 1 | ⚠️ Básico |
+| **API Endpoints** | 5 routers | 🔄 95% |
+| **Servicios** | 4 | ✅ Completo |
 | **Agentes** | 6 | ⚠️ Estructura |
-| **Tests de Integración** | 60+ casos | ✅ Completo |
+| **Tests de Integración** | 70+ casos | ✅ Completo |
+
+**Servicios implementados:**
+1. BookingService - Gestión de reservas
+2. PricingService - Motor de cálculo de precios
+3. QuoteService - Cotización instantánea con Google Maps
+4. VehicleOperatingCostService - Análisis de costos operativos (interno)
 
 ### Infraestructura
 
@@ -494,25 +619,27 @@ Al completar un módulo, verifica:
 1. ✅ **Sistema desplegado en producción** accesible desde cualquier dispositivo
 2. ✅ **11 modelos de datos completos** con relaciones bien diseñadas
 3. ✅ **5 integraciones externas funcionando** (Twilio, SendGrid, Stripe, Google Maps, WhatsApp)
-4. ✅ **60+ tests de integración** con cobertura completa
+4. ✅ **70+ tests de integración** con cobertura completa
 5. ✅ **JWT authentication completo** con seguridad robusta
 6. ✅ **API REST funcional** con documentación OpenAPI
 7. ✅ **Auto-deploy desde GitHub** con CI/CD básico
 8. ✅ **Arquitectura modular** preparada para escalar
+9. ✅ **Sistema de Cotización Instantánea** (<2 segundos) con Google Maps ✨ NUEVO
+10. ✅ **Sistema de análisis de costos operativos** para vehículos (interno) ✨ NUEVO
 
 ### Próximo hito importante:
 
-🎯 **Sistema de Cotización Instantánea** (<2 segundos) - EN DESARROLLO
+🎯 **Completar F4 (API Endpoints)** - Invoices, Vehicles, Drivers, Payments
 
 ---
 
 ## 📞 CONTACTO Y SOPORTE
 
 **Repositorio:** https://github.com/yvrah78/HandlerProject
-**Última actualización:** 2025-11-11
-**Versión del documento:** 1.0
+**Última actualización:** 2025-11-12
+**Versión del documento:** 1.2
 **Mantenido por:** Project Handler Team
 
 ---
 
-**🚀 ¡Estamos al 60% del proyecto! Sigamos construyendo.**
+**🚀 ¡Estamos al 70% del proyecto! Sigamos construyendo.**
