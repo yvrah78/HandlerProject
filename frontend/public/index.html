@@ -16,6 +16,7 @@
             </div>
             <ul class="nav-menu">
                 <li><a href="#" data-page="dashboard" class="nav-link active">🏠 Dashboard</a></li>
+                <li><a href="#" data-page="chat" class="nav-link">💬 AI Chat</a></li>
                 <li><a href="#" data-page="bookings" class="nav-link">📋 Bookings</a></li>
                 <li><a href="#" data-page="customers" class="nav-link">👥 Clientes</a></li>
                 <li><a href="#" data-page="agents" class="nav-link">🤖 Agentes</a></li>
@@ -98,6 +99,60 @@
                                 <span class="action-icon">📖</span>
                                 <span>API Docs</span>
                             </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI Chat Page -->
+                <div id="chat-page" class="page">
+                    <div class="section">
+                        <h2>💬 AI Coordinator Assistant</h2>
+                        <p class="subtitle">Chat con el agente coordinador inteligente</p>
+
+                        <div class="chat-container">
+                            <div class="chat-header">
+                                <div class="agent-status">
+                                    <span class="agent-avatar">🤖</span>
+                                    <div>
+                                        <h4>Coordinator Agent</h4>
+                                        <p class="agent-status-text" id="agentStatus">Ready</p>
+                                    </div>
+                                </div>
+                                <button class="btn btn-small" onclick="clearChatHistory()">🗑️ Clear History</button>
+                            </div>
+
+                            <div class="chat-messages" id="chatMessages">
+                                <div class="message assistant">
+                                    <div class="message-avatar">🤖</div>
+                                    <div class="message-content">
+                                        <p>Hello! I'm your AI Coordinator Assistant. I can help you with:</p>
+                                        <ul>
+                                            <li>Creating and managing bookings</li>
+                                            <li>Customer information</li>
+                                            <li>Coordinating tasks across the system</li>
+                                            <li>Answering questions about operations</li>
+                                        </ul>
+                                        <p>How can I assist you today?</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="chat-input-container">
+                                <form id="chatForm" onsubmit="handleChatSubmit(event)">
+                                    <input
+                                        type="text"
+                                        id="chatInput"
+                                        class="chat-input"
+                                        placeholder="Type your message here..."
+                                        autocomplete="off"
+                                        required
+                                    >
+                                    <button type="submit" class="btn btn-primary" id="chatSendBtn">
+                                        Send
+                                    </button>
+                                </form>
+                                <p class="chat-hint">Press Enter to send • Powered by Claude-3 Sonnet</p>
+                            </div>
                         </div>
                     </div>
                 </div>

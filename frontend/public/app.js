@@ -749,6 +749,189 @@ Estado: ${booking.status}
 }
 
 // =====================================================
+// AI CHAT FUNCTIONALITY
+// =====================================================
+
+async function handleChatSubmit(e) {
+    e.preventDefault();
+
+    const chatInput = document.getElementById('chatInput');
+    const message = chatInput.value.trim();
+
+    if (!message) return;
+
+    // Clear input
+    chatInput.value = '';
+
+    // Add user message to chat
+    addMessageToChat('user', message);
+
+    // Show typing indicator
+    const typingId = addTypingIndicator();
+
+    try {
+        // Send message to coordinator agent
+        const response = await apiCall('/api/v1/agents/coordinator/chat', 'POST', {
+            message: message
+        });
+
+        // Remove typing indicator
+        removeTypingIndicator(typingId);
+
+        // Add agent response
+        if (response.success && response.result) {
+            const aiMessage = response.result.response || 'I received your message but couldn\'t generate a response.';
+            addMessageToChat('assistant', aiMessage, response.result);
+        } else {
+            addMessageToChat('assistant', 'Sorry, I encountered an error processing your request.', null, true);
+        }
+
+    } catch (error) {
+        removeTypingIndicator(typingId);
+        addMessageToChat('assistant', `Error: ${error.message}`, null, true);
+        console.error('Chat error:', error);
+    }
+
+    // Scroll to bottom
+    scrollChatToBottom();
+}
+
+function addMessageToChat(role, content, metadata = null, isError = false) {
+    const chatMessages = document.getElementById('chatMessages');
+
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${role} ${isError ? 'error' : ''}`;
+
+    const avatar = role === 'user' ? '👤' : '🤖';
+
+    messageDiv.innerHTML = `
+        <div class="message-avatar">${avatar}</div>
+        <div class="message-content">
+            <div class="message-text">${formatMessageContent(content)}</div>
+            ${metadata ? `<div class="message-metadata">${formatMetadata(metadata)}</div>` : ''}
+            <div class="message-time">${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</div>
+        </div>
+    `;
+
+    chatMessages.appendChild(messageDiv);
+    scrollChatToBottom();
+}
+
+function formatMessageContent(content) {
+    // Convert newlines to <br>
+    let formatted = content.replace(/\n/g, '<br>');
+
+    // Convert **bold** to <strong>
+    formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+    // Convert lists
+    formatted = formatted.replace(/^- (.+)$/gm, '<li>$1</li>');
+
+    // Wrap lists in <ul>
+    if (formatted.includes('<li>')) {
+        formatted = formatted.replace(/(<li>.*<\/li>)/g, '<ul>$1</ul>');
+    }
+
+    return formatted;
+}
+
+function formatMetadata(metadata) {
+    if (!metadata) return '';
+
+    let metadataHtml = '<div class="metadata-container">';
+
+    if (metadata.routing) {
+        const routing = metadata.routing;
+        if (routing.suggested_agents && routing.suggested_agents.length > 0) {
+            metadataHtml += `
+                <div class="metadata-item">
+                    <strong>Suggested Agents:</strong> ${routing.suggested_agents.join(', ')}
+                </div>
+            `;
+        }
+    }
+
+    if (metadata.mode) {
+        metadataHtml += `
+            <div class="metadata-item">
+                <span class="badge badge-info">Mode: ${metadata.mode}</span>
+            </div>
+        `;
+    }
+
+    metadataHtml += '</div>';
+    return metadataHtml;
+}
+
+let typingCounter = 0;
+
+function addTypingIndicator() {
+    const chatMessages = document.getElementById('chatMessages');
+    const typingId = `typing-${typingCounter++}`;
+
+    const typingDiv = document.createElement('div');
+    typingDiv.id = typingId;
+    typingDiv.className = 'message assistant typing';
+    typingDiv.innerHTML = `
+        <div class="message-avatar">🤖</div>
+        <div class="message-content">
+            <div class="typing-indicator">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+    `;
+
+    chatMessages.appendChild(typingDiv);
+    scrollChatToBottom();
+
+    return typingId;
+}
+
+function removeTypingIndicator(typingId) {
+    const typingDiv = document.getElementById(typingId);
+    if (typingDiv) {
+        typingDiv.remove();
+    }
+}
+
+function scrollChatToBottom() {
+    const chatMessages = document.getElementById('chatMessages');
+    if (chatMessages) {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+}
+
+async function clearChatHistory() {
+    if (!confirm('Are you sure you want to clear the chat history?')) {
+        return;
+    }
+
+    try {
+        // Call backend to clear history
+        await apiCall('/api/v1/agents/coordinator/clear-history', 'POST');
+
+        // Clear UI
+        const chatMessages = document.getElementById('chatMessages');
+        chatMessages.innerHTML = `
+            <div class="message assistant">
+                <div class="message-avatar">🤖</div>
+                <div class="message-content">
+                    <p>Chat history cleared. How can I assist you?</p>
+                </div>
+            </div>
+        `;
+
+        showToast('Chat history cleared', 'success');
+
+    } catch (error) {
+        showToast('Error clearing history', 'error');
+        console.error('Error clearing history:', error);
+    }
+}
+
+// =====================================================
 // AGENTS (Demo - will be implemented in AI modules)
 // =====================================================
 
@@ -838,6 +1021,8 @@ window.showRegisterForm = showRegisterForm;
 window.showLoginForm = showLoginForm;
 window.viewCustomer = viewCustomer;
 window.viewBooking = viewBooking;
+window.handleChatSubmit = handleChatSubmit;
+window.clearChatHistory = clearChatHistory;
 
 console.log('Project Handler Frontend initialized');
 console.log('API Base URL:', API_BASE_URL);
