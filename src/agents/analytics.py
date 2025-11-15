@@ -6,10 +6,8 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 from decimal import Decimal
 
-from langchain.prompts import PromptTemplate
-from langchain.chains import LLMChain
+from langchain_core.prompts import PromptTemplate
 from langchain_anthropic import ChatAnthropic
-from langchain.memory import ConversationBufferMemory
 
 from src.agents.base_agent import BaseAgent
 from src.core.exceptions import ValidationError, AgentError
@@ -70,13 +68,7 @@ class AnalyticsAgent(BaseAgent):
             self.logger.error(f"Failed to initialize AI model: {str(e)}")
 
     def _initialize_langchain_components(self):
-        """Initialize LangChain chains and memory."""
-        # Conversation memory for context
-        self.memory = ConversationBufferMemory(
-            memory_key="chat_history",
-            return_messages=True
-        )
-
+        """Initialize LangChain chains and prompts."""
         # Prompt templates for different report types
         self.prompts = {
             "performance": self._create_performance_prompt(),
@@ -86,15 +78,12 @@ class AnalyticsAgent(BaseAgent):
             "predictive": self._create_predictive_prompt()
         }
 
-        # Create chains for each report type
+        # Store chains dict (will use prompts directly with LLM in langchain 1.0+)
         self.chains = {}
         if self.ai_enabled:
+            # In langchain 1.0+, we use prompts directly with the LLM
             for report_type, prompt in self.prompts.items():
-                self.chains[report_type] = LLMChain(
-                    llm=self.llm,
-                    prompt=prompt,
-                    memory=self.memory
-                )
+                self.chains[report_type] = prompt | self.llm
 
     def _create_performance_prompt(self) -> PromptTemplate:
         """Create prompt template for performance analytics."""
@@ -319,12 +308,13 @@ Base predictions on data patterns and industry knowledge."""
 
                 # Run LangChain chain to generate insights
                 chain = self.chains[report_type]
-                ai_response = await chain.arun(
-                    metrics_data=metrics_summary,
-                    time_period=time_period
-                )
+                ai_response = await chain.ainvoke({
+                    "metrics_data": metrics_summary,
+                    "time_period": time_period
+                })
 
-                report["insights"] = ai_response
+                # Extract content from AI response
+                report["insights"] = ai_response.content if hasattr(ai_response, 'content') else str(ai_response)
                 report["ai_generated"] = True
 
                 self.logger.info(f"Generated AI insights for {report_type} report")
