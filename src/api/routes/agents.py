@@ -10,6 +10,7 @@ from src.models.user import User
 from src.agents.coordinator import CoordinatorAgent
 from src.agents.communications import CommunicationsAgent
 from src.agents.financial import FinancialAgent
+from src.agents.operations import OperationsAgent
 
 # Initialize router
 router = APIRouter(prefix="/agents", tags=["Agents"])
@@ -18,6 +19,7 @@ router = APIRouter(prefix="/agents", tags=["Agents"])
 _coordinator_agent: Optional[CoordinatorAgent] = None
 _communications_agent: Optional[CommunicationsAgent] = None
 _financial_agent: Optional[FinancialAgent] = None
+_operations_agent: Optional[OperationsAgent] = None
 
 
 def get_coordinator_agent() -> CoordinatorAgent:
@@ -1194,4 +1196,524 @@ async def test_financial(
             "operation": operation,
             "error": str(e),
             "agent_status": financial_agent.get_status()
+        }
+
+
+# =====================================================
+# OPERATIONS AGENT ENDPOINTS
+# =====================================================
+
+def get_operations_agent() -> OperationsAgent:
+    """
+    Get or create the operations agent instance.
+
+    Returns:
+        OperationsAgent: Singleton operations agent
+    """
+    global _operations_agent
+    if _operations_agent is None:
+        _operations_agent = OperationsAgent()
+    return _operations_agent
+
+
+class RouteRequest(BaseModel):
+    """Request model for route planning."""
+    origin: str = Field(..., description="Origin address")
+    destination: str = Field(..., description="Destination address")
+    mode: str = Field(default="driving", description="Travel mode: driving, walking, bicycling, transit")
+    waypoints: Optional[List[str]] = Field(default=None, description="Optional waypoints")
+    optimize_waypoints: bool = Field(default=False, description="Optimize waypoint order")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "origin": "New York, NY",
+                "destination": "Boston, MA",
+                "mode": "driving",
+                "waypoints": ["Hartford, CT"]
+            }
+        }
+
+
+class DistanceRequest(BaseModel):
+    """Request model for distance calculation."""
+    origin: Optional[str] = Field(default=None, description="Single origin address")
+    destination: Optional[str] = Field(default=None, description="Single destination address")
+    origins: Optional[List[str]] = Field(default=None, description="Multiple origin addresses")
+    destinations: Optional[List[str]] = Field(default=None, description="Multiple destination addresses")
+    mode: str = Field(default="driving", description="Travel mode")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "origin": "New York, NY",
+                "destination": "Philadelphia, PA",
+                "mode": "driving"
+            }
+        }
+
+
+class GeocodeRequest(BaseModel):
+    """Request model for geocoding."""
+    address: Optional[str] = Field(default=None, description="Address to geocode")
+    lat: Optional[float] = Field(default=None, description="Latitude for reverse geocoding")
+    lng: Optional[float] = Field(default=None, description="Longitude for reverse geocoding")
+    reverse: bool = Field(default=False, description="Perform reverse geocoding")
+
+    class Config:
+        json_schema_extra = {
+            "examples": [
+                {
+                    "address": "1600 Amphitheatre Parkway, Mountain View, CA"
+                },
+                {
+                    "lat": 37.422,
+                    "lng": -122.084,
+                    "reverse": True
+                }
+            ]
+        }
+
+
+class OptimizeRouteRequest(BaseModel):
+    """Request model for route optimization."""
+    waypoints: List[str] = Field(..., description="Addresses to visit")
+    origin: Optional[str] = Field(default=None, description="Starting location")
+    destination: Optional[str] = Field(default=None, description="Ending location")
+    mode: str = Field(default="driving", description="Travel mode")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "origin": "New York, NY",
+                "destination": "New York, NY",
+                "waypoints": [
+                    "Newark, NJ",
+                    "Jersey City, NJ",
+                    "Hoboken, NJ"
+                ],
+                "mode": "driving"
+            }
+        }
+
+
+class FleetAssignmentRequest(BaseModel):
+    """Request model for fleet/driver assignment."""
+    pickup_location: str = Field(..., description="Pickup location")
+    delivery_location: str = Field(..., description="Delivery location")
+    requirements: Optional[List[str]] = Field(default=None, description="Special requirements")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "pickup_location": "123 Main St, New York, NY",
+                "delivery_location": "456 Broadway, New York, NY",
+                "requirements": ["refrigerated", "heavy_duty"]
+            }
+        }
+
+
+@router.get("/operations/status")
+def get_operations_status(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get the current status of the operations agent.
+
+    Returns:
+        Dict: Agent status including Google Maps status, fleet info, and operation count
+    """
+    ops_agent = get_operations_agent()
+    return ops_agent.get_status()
+
+
+@router.post("/operations/plan-route")
+async def plan_route(
+    request: RouteRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Plan a route from origin to destination.
+
+    Uses Google Maps to calculate the best route with real-time traffic.
+
+    Args:
+        request: Route request
+        current_user: Authenticated user
+
+    Returns:
+        Dict: Route information with distance, duration, and steps
+
+    Example:
+        ```json
+        {
+            "origin": "New York, NY",
+            "destination": "Boston, MA",
+            "mode": "driving"
+        }
+        ```
+    """
+    ops_agent = get_operations_agent()
+
+    input_data = {
+        "operation_type": "route_planning",
+        "origin": request.origin,
+        "destination": request.destination,
+        "mode": request.mode,
+        "waypoints": request.waypoints or [],
+        "optimize_waypoints": request.optimize_waypoints,
+        "user_id": current_user.id
+    }
+
+    try:
+        result = await ops_agent.execute(input_data)
+        return result
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Route planning failed: {str(e)}"
+        )
+
+
+@router.post("/operations/calculate-distance")
+async def calculate_distance(
+    request: DistanceRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Calculate distance and duration between locations.
+
+    Supports both single and multiple origin-destination pairs.
+
+    Args:
+        request: Distance calculation request
+        current_user: Authenticated user
+
+    Returns:
+        Dict: Distance matrix with all combinations
+
+    Example:
+        ```json
+        {
+            "origin": "New York, NY",
+            "destination": "Philadelphia, PA",
+            "mode": "driving"
+        }
+        ```
+    """
+    ops_agent = get_operations_agent()
+
+    input_data = {
+        "operation_type": "distance",
+        "mode": request.mode,
+        "user_id": current_user.id
+    }
+
+    if request.origin and request.destination:
+        input_data["origin"] = request.origin
+        input_data["destination"] = request.destination
+    elif request.origins and request.destinations:
+        input_data["origins"] = request.origins
+        input_data["destinations"] = request.destinations
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Must provide either origin/destination or origins/destinations"
+        )
+
+    try:
+        result = await ops_agent.execute(input_data)
+        return result
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Distance calculation failed: {str(e)}"
+        )
+
+
+@router.post("/operations/geocode")
+async def geocode_address(
+    request: GeocodeRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Geocode an address to coordinates or reverse geocode coordinates to address.
+
+    Args:
+        request: Geocoding request
+        current_user: Authenticated user
+
+    Returns:
+        Dict: Geocoding result with formatted address and coordinates
+
+    Examples:
+        Forward geocoding:
+        ```json
+        {
+            "address": "1600 Amphitheatre Parkway, Mountain View, CA"
+        }
+        ```
+
+        Reverse geocoding:
+        ```json
+        {
+            "lat": 37.422,
+            "lng": -122.084,
+            "reverse": true
+        }
+        ```
+    """
+    ops_agent = get_operations_agent()
+
+    input_data = {
+        "operation_type": "geocode",
+        "reverse": request.reverse,
+        "user_id": current_user.id
+    }
+
+    if request.reverse:
+        if request.lat is None or request.lng is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Reverse geocoding requires lat and lng"
+            )
+        input_data["lat"] = request.lat
+        input_data["lng"] = request.lng
+    else:
+        if not request.address:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Forward geocoding requires address"
+            )
+        input_data["address"] = request.address
+
+    try:
+        result = await ops_agent.execute(input_data)
+        return result
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Geocoding failed: {str(e)}"
+        )
+
+
+@router.post("/operations/optimize-route")
+async def optimize_route(
+    request: OptimizeRouteRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Optimize a multi-stop route.
+
+    Uses Google Maps to find the most efficient order to visit all waypoints.
+
+    Args:
+        request: Route optimization request
+        current_user: Authenticated user
+
+    Returns:
+        Dict: Optimized route with waypoint order and total distance/duration
+
+    Example:
+        ```json
+        {
+            "origin": "New York, NY",
+            "destination": "New York, NY",
+            "waypoints": ["Newark, NJ", "Jersey City, NJ", "Hoboken, NJ"],
+            "mode": "driving"
+        }
+        ```
+    """
+    ops_agent = get_operations_agent()
+
+    input_data = {
+        "operation_type": "optimize_route",
+        "waypoints": request.waypoints,
+        "origin": request.origin,
+        "destination": request.destination,
+        "mode": request.mode,
+        "user_id": current_user.id
+    }
+
+    try:
+        result = await ops_agent.execute(input_data)
+        return result
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Route optimization failed: {str(e)}"
+        )
+
+
+@router.post("/operations/assign-driver")
+async def assign_driver(
+    request: FleetAssignmentRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Assign a driver for a delivery.
+
+    Uses intelligent assignment based on driver availability and proximity.
+
+    Args:
+        request: Fleet assignment request
+        current_user: Authenticated user
+
+    Returns:
+        Dict: Assignment result with driver information
+
+    Example:
+        ```json
+        {
+            "pickup_location": "123 Main St, New York, NY",
+            "delivery_location": "456 Broadway, New York, NY",
+            "requirements": ["refrigerated"]
+        }
+        ```
+    """
+    ops_agent = get_operations_agent()
+
+    input_data = {
+        "operation_type": "fleet_assignment",
+        "pickup_location": request.pickup_location,
+        "delivery_location": request.delivery_location,
+        "requirements": request.requirements or [],
+        "user_id": current_user.id
+    }
+
+    try:
+        result = await ops_agent.execute(input_data)
+        return result
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Driver assignment failed: {str(e)}"
+        )
+
+
+@router.get("/operations/fleet-status")
+def get_fleet_status(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get current fleet status.
+
+    Returns:
+        Dict: Fleet information with driver availability
+    """
+    ops_agent = get_operations_agent()
+    return ops_agent.get_fleet_status()
+
+
+@router.get("/operations/history")
+def get_operations_history(
+    limit: Optional[int] = 50,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get operations history.
+
+    Args:
+        limit: Maximum number of operations to return
+        current_user: Authenticated user
+
+    Returns:
+        Dict: Operations history
+    """
+    ops_agent = get_operations_agent()
+    history = ops_agent.get_operations_history(limit=limit)
+
+    return {
+        "history": history,
+        "total": len(ops_agent.operations_history),
+        "showing": len(history)
+    }
+
+
+@router.post("/operations/clear-history", status_code=status.HTTP_204_NO_CONTENT)
+def clear_operations_history(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Clear the operations history.
+
+    Returns:
+        None: 204 No Content on success
+    """
+    ops_agent = get_operations_agent()
+    ops_agent.clear_history()
+    return None
+
+
+@router.get("/operations/test")
+async def test_operations(
+    operation: str = "route_planning",
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Test the operations agent.
+
+    Args:
+        operation: Operation to test (route_planning, distance, geocode, optimize_route, fleet_assignment)
+        current_user: Authenticated user
+
+    Returns:
+        Dict: Test result
+    """
+    ops_agent = get_operations_agent()
+
+    test_data = {
+        "route_planning": {
+            "operation_type": "route_planning",
+            "origin": "New York, NY",
+            "destination": "Boston, MA",
+            "mode": "driving"
+        },
+        "distance": {
+            "operation_type": "distance",
+            "origin": "New York, NY",
+            "destination": "Philadelphia, PA",
+            "mode": "driving"
+        },
+        "geocode": {
+            "operation_type": "geocode",
+            "address": "1600 Amphitheatre Parkway, Mountain View, CA"
+        },
+        "optimize_route": {
+            "operation_type": "optimize_route",
+            "origin": "New York, NY",
+            "destination": "New York, NY",
+            "waypoints": ["Newark, NJ", "Jersey City, NJ", "Hoboken, NJ"],
+            "mode": "driving"
+        },
+        "fleet_assignment": {
+            "operation_type": "fleet_assignment",
+            "pickup_location": "123 Main St, New York, NY",
+            "delivery_location": "456 Broadway, New York, NY"
+        }
+    }
+
+    input_data = test_data.get(operation, test_data["route_planning"])
+
+    try:
+        result = await ops_agent.execute(input_data)
+
+        return {
+            "test": "success",
+            "operation": operation,
+            "agent_status": ops_agent.get_status(),
+            "result": result
+        }
+
+    except Exception as e:
+        return {
+            "test": "failed",
+            "operation": operation,
+            "error": str(e),
+            "agent_status": ops_agent.get_status()
         }
