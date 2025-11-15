@@ -21,7 +21,10 @@ python-dotenv==1.0.0
 # AI and Agents
 langchain==0.1.0
 langchain-anthropic==0.1.0
+langchain-openai==0.0.2
 anthropic==0.7.0
+openai==1.6.1
+tiktoken==0.5.2
 
 # External Integrations
 twilio==8.10.0
