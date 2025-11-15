@@ -8,12 +8,14 @@ from pydantic import BaseModel, Field
 from src.core.security import get_current_user
 from src.models.user import User
 from src.agents.coordinator import CoordinatorAgent
+from src.agents.communications import CommunicationsAgent
 
 # Initialize router
 router = APIRouter(prefix="/agents", tags=["Agents"])
 
-# Global coordinator agent instance (singleton pattern)
+# Global agent instances (singleton pattern)
 _coordinator_agent: Optional[CoordinatorAgent] = None
+_communications_agent: Optional[CommunicationsAgent] = None
 
 
 def get_coordinator_agent() -> CoordinatorAgent:
@@ -368,4 +370,313 @@ async def test_coordinator(
             "test": "failed",
             "error": str(e),
             "coordinator_status": coordinator.get_status()
+        }
+
+
+# =====================================================
+# COMMUNICATIONS AGENT ENDPOINTS
+# =====================================================
+
+def get_communications_agent() -> CommunicationsAgent:
+    """
+    Get or create the communications agent instance.
+
+    Returns:
+        CommunicationsAgent: Singleton communications agent
+    """
+    global _communications_agent
+    if _communications_agent is None:
+        _communications_agent = CommunicationsAgent()
+    return _communications_agent
+
+
+class CommunicationRequest(BaseModel):
+    """Request model for communication."""
+    communication_type: str = Field(..., description="Type: sms, email, call, notification")
+    to: str = Field(..., description="Recipient (phone number or email)")
+    message: str = Field(..., description="Message content")
+    subject: Optional[str] = Field(default=None, description="Email subject (email only)")
+    from_email: Optional[str] = Field(default=None, description="Sender email (email only)")
+    channels: Optional[List[str]] = Field(default=None, description="Channels for notification type")
+
+    class Config:
+        json_schema_extra = {
+            "examples": [
+                {
+                    "communication_type": "sms",
+                    "to": "+1234567890",
+                    "message": "Your booking has been confirmed!"
+                },
+                {
+                    "communication_type": "email",
+                    "to": "customer@example.com",
+                    "subject": "Booking Confirmation",
+                    "message": "Your booking has been confirmed. Thank you!"
+                },
+                {
+                    "communication_type": "notification",
+                    "to": "+1234567890",
+                    "message": "Important update",
+                    "channels": ["sms", "email"]
+                }
+            ]
+        }
+
+
+@router.get("/communications/status")
+def get_communications_status(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get the current status of the communications agent.
+
+    Returns:
+        Dict: Agent status including enabled channels and history count
+    """
+    comm_agent = get_communications_agent()
+    return comm_agent.get_status()
+
+
+@router.post("/communications/send")
+async def send_communication(
+    request: CommunicationRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Send a communication via SMS, email, or phone call.
+
+    Supports:
+    - SMS via Twilio
+    - Email via SendGrid
+    - Phone calls via Twilio
+    - Multi-channel notifications
+
+    Args:
+        request: Communication request
+        current_user: Authenticated user
+
+    Returns:
+        Dict: Communication result
+
+    Examples:
+        SMS:
+        ```json
+        {
+            "communication_type": "sms",
+            "to": "+1234567890",
+            "message": "Your booking #12345 is confirmed!"
+        }
+        ```
+
+        Email:
+        ```json
+        {
+            "communication_type": "email",
+            "to": "customer@example.com",
+            "subject": "Booking Confirmation",
+            "message": "Dear customer, your booking has been confirmed."
+        }
+        ```
+    """
+    comm_agent = get_communications_agent()
+
+    input_data = {
+        "communication_type": request.communication_type,
+        "to": request.to,
+        "message": request.message
+    }
+
+    if request.subject:
+        input_data["subject"] = request.subject
+    if request.from_email:
+        input_data["from_email"] = request.from_email
+    if request.channels:
+        input_data["channels"] = request.channels
+
+    # Add user context
+    input_data["user_id"] = current_user.id
+    input_data["user_name"] = current_user.full_name or current_user.username
+
+    try:
+        result = await comm_agent.execute(input_data)
+        return result
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Communication failed: {str(e)}"
+        )
+
+
+@router.post("/communications/send-sms")
+async def send_sms(
+    to: str,
+    message: str,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Convenience endpoint to send SMS.
+
+    Args:
+        to: Recipient phone number (e.g., +1234567890)
+        message: SMS message content
+        current_user: Authenticated user
+
+    Returns:
+        Dict: SMS delivery result
+    """
+    comm_agent = get_communications_agent()
+
+    input_data = {
+        "communication_type": "sms",
+        "to": to,
+        "message": message,
+        "user_id": current_user.id
+    }
+
+    try:
+        result = await comm_agent.execute(input_data)
+        return result
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"SMS failed: {str(e)}"
+        )
+
+
+@router.post("/communications/send-email")
+async def send_email(
+    to: str,
+    subject: str,
+    message: str,
+    from_email: Optional[str] = None,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Convenience endpoint to send email.
+
+    Args:
+        to: Recipient email address
+        subject: Email subject
+        message: Email message content
+        from_email: Optional sender email
+        current_user: Authenticated user
+
+    Returns:
+        Dict: Email delivery result
+    """
+    comm_agent = get_communications_agent()
+
+    input_data = {
+        "communication_type": "email",
+        "to": to,
+        "subject": subject,
+        "message": message,
+        "user_id": current_user.id
+    }
+
+    if from_email:
+        input_data["from_email"] = from_email
+
+    try:
+        result = await comm_agent.execute(input_data)
+        return result
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Email failed: {str(e)}"
+        )
+
+
+@router.get("/communications/history")
+def get_communications_history(
+    limit: Optional[int] = 50,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get communication history.
+
+    Args:
+        limit: Maximum number of communications to return
+        current_user: Authenticated user
+
+    Returns:
+        Dict: Communication history
+    """
+    comm_agent = get_communications_agent()
+    history = comm_agent.get_communication_history(limit=limit)
+
+    return {
+        "history": history,
+        "total": len(comm_agent.communication_history),
+        "showing": len(history)
+    }
+
+
+@router.post("/communications/clear-history", status_code=status.HTTP_204_NO_CONTENT)
+def clear_communications_history(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Clear the communication history.
+
+    Returns:
+        None: 204 No Content on success
+    """
+    comm_agent = get_communications_agent()
+    comm_agent.clear_history()
+    return None
+
+
+@router.get("/communications/test")
+async def test_communications(
+    channel: str = "sms",
+    recipient: str = "+1234567890",
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Test the communications agent.
+
+    Args:
+        channel: Channel to test (sms, email, call)
+        recipient: Test recipient
+        current_user: Authenticated user
+
+    Returns:
+        Dict: Test result
+    """
+    comm_agent = get_communications_agent()
+
+    test_messages = {
+        "sms": "This is a test SMS from Project Handler",
+        "email": "This is a test email from Project Handler",
+        "call": "Hello, this is a test call from Project Handler"
+    }
+
+    input_data = {
+        "communication_type": channel,
+        "to": recipient,
+        "message": test_messages.get(channel, "Test message"),
+        "subject": "Test Email from Project Handler" if channel == "email" else None
+    }
+
+    try:
+        result = await comm_agent.execute(input_data)
+
+        return {
+            "test": "success",
+            "channel": channel,
+            "recipient": recipient,
+            "agent_status": comm_agent.get_status(),
+            "result": result
+        }
+
+    except Exception as e:
+        return {
+            "test": "failed",
+            "channel": channel,
+            "error": str(e),
+            "agent_status": comm_agent.get_status()
         }
