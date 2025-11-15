@@ -9,6 +9,7 @@ from src.core.security import get_current_user
 from src.models.user import User
 from src.agents.coordinator import CoordinatorAgent
 from src.agents.communications import CommunicationsAgent
+from src.agents.financial import FinancialAgent
 
 # Initialize router
 router = APIRouter(prefix="/agents", tags=["Agents"])
@@ -16,6 +17,7 @@ router = APIRouter(prefix="/agents", tags=["Agents"])
 # Global agent instances (singleton pattern)
 _coordinator_agent: Optional[CoordinatorAgent] = None
 _communications_agent: Optional[CommunicationsAgent] = None
+_financial_agent: Optional[FinancialAgent] = None
 
 
 def get_coordinator_agent() -> CoordinatorAgent:
@@ -679,4 +681,517 @@ async def test_communications(
             "channel": channel,
             "error": str(e),
             "agent_status": comm_agent.get_status()
+        }
+
+
+# =====================================================
+# FINANCIAL AGENT ENDPOINTS
+# =====================================================
+
+def get_financial_agent() -> FinancialAgent:
+    """
+    Get or create the financial agent instance.
+
+    Returns:
+        FinancialAgent: Singleton financial agent
+    """
+    global _financial_agent
+    if _financial_agent is None:
+        _financial_agent = FinancialAgent()
+    return _financial_agent
+
+
+class FinancialOperationRequest(BaseModel):
+    """Request model for financial operations."""
+    operation_type: str = Field(..., description="Type: payment, invoice, refund, quotation")
+    amount: Optional[float] = Field(default=None, description="Amount (required for payment/invoice)")
+    currency: Optional[str] = Field(default="usd", description="Currency code")
+    description: Optional[str] = Field(default=None, description="Operation description")
+    customer_email: Optional[str] = Field(default=None, description="Customer email")
+    customer_name: Optional[str] = Field(default=None, description="Customer name")
+    payment_intent_id: Optional[str] = Field(default=None, description="Payment intent ID (for refunds)")
+    metadata: Optional[Dict[str, Any]] = Field(default=None, description="Additional metadata")
+
+    class Config:
+        json_schema_extra = {
+            "examples": [
+                {
+                    "operation_type": "payment",
+                    "amount": 150.00,
+                    "currency": "usd",
+                    "description": "Transportation service payment",
+                    "customer_email": "customer@example.com"
+                },
+                {
+                    "operation_type": "refund",
+                    "payment_intent_id": "pi_1234567890",
+                    "amount": 75.00
+                }
+            ]
+        }
+
+
+class PaymentRequest(BaseModel):
+    """Request model for payment creation."""
+    amount: float = Field(..., description="Payment amount", gt=0)
+    currency: str = Field(default="usd", description="Currency code")
+    description: Optional[str] = Field(default="Payment for transportation services", description="Payment description")
+    customer_email: Optional[str] = Field(default=None, description="Customer email for receipt")
+    metadata: Optional[Dict[str, Any]] = Field(default=None, description="Additional metadata")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "amount": 150.00,
+                "currency": "usd",
+                "description": "Transportation service - Booking #12345",
+                "customer_email": "customer@example.com"
+            }
+        }
+
+
+class InvoiceRequest(BaseModel):
+    """Request model for invoice creation."""
+    customer_email: str = Field(..., description="Customer email")
+    customer_name: str = Field(..., description="Customer name")
+    amount: float = Field(..., description="Invoice amount", gt=0)
+    currency: str = Field(default="usd", description="Currency code")
+    description: Optional[str] = Field(default="Transportation services", description="Invoice description")
+    items: Optional[List[Dict[str, Any]]] = Field(default=None, description="Invoice line items")
+    due_date: Optional[str] = Field(default=None, description="Due date (ISO format or Unix timestamp)")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "customer_email": "customer@example.com",
+                "customer_name": "John Doe",
+                "amount": 250.00,
+                "currency": "usd",
+                "description": "Transportation services - January 2024",
+                "items": [
+                    {"description": "Standard delivery", "amount": 150.00},
+                    {"description": "Express surcharge", "amount": 100.00}
+                ]
+            }
+        }
+
+
+class RefundRequest(BaseModel):
+    """Request model for refund processing."""
+    payment_intent_id: str = Field(..., description="Payment intent ID to refund")
+    amount: Optional[float] = Field(default=None, description="Partial refund amount (omit for full refund)")
+    reason: Optional[str] = Field(default="requested_by_customer", description="Refund reason")
+    metadata: Optional[Dict[str, Any]] = Field(default=None, description="Additional metadata")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "payment_intent_id": "pi_1234567890",
+                "amount": 75.00,
+                "reason": "service_not_delivered"
+            }
+        }
+
+
+class QuotationRequest(BaseModel):
+    """Request model for price quotation."""
+    service_type: str = Field(default="standard_delivery", description="Service type")
+    distance_miles: float = Field(default=0, description="Distance in miles", ge=0)
+    estimated_hours: float = Field(default=0, description="Estimated hours", ge=0)
+    urgency: str = Field(default="normal", description="Urgency level: normal, urgent, emergency")
+    special_requirements: Optional[List[str]] = Field(default=None, description="Special requirements")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "service_type": "express_delivery",
+                "distance_miles": 45.5,
+                "estimated_hours": 2.5,
+                "urgency": "urgent",
+                "special_requirements": ["refrigerated", "fragile"]
+            }
+        }
+
+
+@router.get("/financial/status")
+def get_financial_status(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get the current status of the financial agent.
+
+    Returns:
+        Dict: Agent status including Stripe status, operation count, and pricing info
+    """
+    financial_agent = get_financial_agent()
+    return financial_agent.get_status()
+
+
+@router.post("/financial/process")
+async def process_financial_operation(
+    request: FinancialOperationRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Process a generic financial operation.
+
+    Supports: payment, invoice, refund, quotation
+
+    Args:
+        request: Financial operation request
+        current_user: Authenticated user
+
+    Returns:
+        Dict: Operation result
+    """
+    financial_agent = get_financial_agent()
+
+    input_data = {
+        "operation_type": request.operation_type,
+        "user_id": current_user.id
+    }
+
+    # Add optional fields if provided
+    if request.amount is not None:
+        input_data["amount"] = request.amount
+    if request.currency:
+        input_data["currency"] = request.currency
+    if request.description:
+        input_data["description"] = request.description
+    if request.customer_email:
+        input_data["customer_email"] = request.customer_email
+    if request.customer_name:
+        input_data["customer_name"] = request.customer_name
+    if request.payment_intent_id:
+        input_data["payment_intent_id"] = request.payment_intent_id
+    if request.metadata:
+        input_data["metadata"] = request.metadata
+
+    try:
+        result = await financial_agent.execute(input_data)
+        return result
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Financial operation failed: {str(e)}"
+        )
+
+
+@router.post("/financial/create-payment")
+async def create_payment(
+    request: PaymentRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Create a payment via Stripe.
+
+    Args:
+        request: Payment request
+        current_user: Authenticated user
+
+    Returns:
+        Dict: Payment result with payment_intent_id and client_secret
+
+    Example:
+        ```json
+        {
+            "amount": 150.00,
+            "currency": "usd",
+            "description": "Transportation service - Booking #12345",
+            "customer_email": "customer@example.com"
+        }
+        ```
+    """
+    financial_agent = get_financial_agent()
+
+    input_data = {
+        "operation_type": "payment",
+        "amount": request.amount,
+        "currency": request.currency,
+        "description": request.description,
+        "customer_email": request.customer_email,
+        "metadata": request.metadata or {},
+        "user_id": current_user.id
+    }
+
+    try:
+        result = await financial_agent.execute(input_data)
+        return result
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Payment creation failed: {str(e)}"
+        )
+
+
+@router.post("/financial/create-invoice")
+async def create_invoice(
+    request: InvoiceRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Create an invoice.
+
+    Args:
+        request: Invoice request
+        current_user: Authenticated user
+
+    Returns:
+        Dict: Invoice result with invoice_number and details
+
+    Example:
+        ```json
+        {
+            "customer_email": "customer@example.com",
+            "customer_name": "John Doe",
+            "amount": 250.00,
+            "description": "Transportation services - January 2024"
+        }
+        ```
+    """
+    financial_agent = get_financial_agent()
+
+    input_data = {
+        "operation_type": "invoice",
+        "customer_email": request.customer_email,
+        "customer_name": request.customer_name,
+        "amount": request.amount,
+        "currency": request.currency,
+        "description": request.description,
+        "items": request.items or [],
+        "due_date": request.due_date,
+        "user_id": current_user.id
+    }
+
+    try:
+        result = await financial_agent.execute(input_data)
+        return result
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Invoice creation failed: {str(e)}"
+        )
+
+
+@router.post("/financial/process-refund")
+async def process_refund(
+    request: RefundRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Process a refund for a previous payment.
+
+    Args:
+        request: Refund request
+        current_user: Authenticated user
+
+    Returns:
+        Dict: Refund result with refund_id
+
+    Example:
+        ```json
+        {
+            "payment_intent_id": "pi_1234567890",
+            "amount": 75.00,
+            "reason": "service_not_delivered"
+        }
+        ```
+    """
+    financial_agent = get_financial_agent()
+
+    input_data = {
+        "operation_type": "refund",
+        "payment_intent_id": request.payment_intent_id,
+        "reason": request.reason,
+        "metadata": request.metadata or {},
+        "user_id": current_user.id
+    }
+
+    if request.amount:
+        input_data["amount"] = request.amount
+
+    try:
+        result = await financial_agent.execute(input_data)
+        return result
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Refund processing failed: {str(e)}"
+        )
+
+
+@router.post("/financial/generate-quote")
+async def generate_quote(
+    request: QuotationRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Generate an intelligent price quotation.
+
+    Uses distance, time, urgency, and special requirements to calculate pricing.
+
+    Args:
+        request: Quotation request
+        current_user: Authenticated user
+
+    Returns:
+        Dict: Detailed quotation with pricing breakdown
+
+    Example:
+        ```json
+        {
+            "service_type": "express_delivery",
+            "distance_miles": 45.5,
+            "estimated_hours": 2.5,
+            "urgency": "urgent",
+            "special_requirements": ["refrigerated", "fragile"]
+        }
+        ```
+    """
+    financial_agent = get_financial_agent()
+
+    input_data = {
+        "operation_type": "quotation",
+        "service_type": request.service_type,
+        "distance_miles": request.distance_miles,
+        "estimated_hours": request.estimated_hours,
+        "urgency": request.urgency,
+        "special_requirements": request.special_requirements or [],
+        "user_id": current_user.id
+    }
+
+    try:
+        result = await financial_agent.execute(input_data)
+        return result
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Quote generation failed: {str(e)}"
+        )
+
+
+@router.get("/financial/history")
+def get_financial_history(
+    limit: Optional[int] = 50,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get financial operation history.
+
+    Args:
+        limit: Maximum number of operations to return
+        current_user: Authenticated user
+
+    Returns:
+        Dict: Financial operation history
+    """
+    financial_agent = get_financial_agent()
+    history = financial_agent.get_financial_history(limit=limit)
+
+    return {
+        "history": history,
+        "total": len(financial_agent.financial_history),
+        "showing": len(history)
+    }
+
+
+@router.get("/financial/pricing")
+def get_pricing_info(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get current pricing configuration.
+
+    Returns:
+        Dict: Pricing information including base rates and multipliers
+    """
+    financial_agent = get_financial_agent()
+    return financial_agent.get_pricing_info()
+
+
+@router.post("/financial/clear-history", status_code=status.HTTP_204_NO_CONTENT)
+def clear_financial_history(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Clear the financial operation history.
+
+    Returns:
+        None: 204 No Content on success
+    """
+    financial_agent = get_financial_agent()
+    financial_agent.clear_history()
+    return None
+
+
+@router.get("/financial/test")
+async def test_financial(
+    operation: str = "quotation",
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Test the financial agent.
+
+    Args:
+        operation: Operation to test (payment, invoice, refund, quotation)
+        current_user: Authenticated user
+
+    Returns:
+        Dict: Test result
+    """
+    financial_agent = get_financial_agent()
+
+    test_data = {
+        "payment": {
+            "operation_type": "payment",
+            "amount": 99.99,
+            "currency": "usd",
+            "description": "Test payment",
+            "customer_email": "test@example.com"
+        },
+        "invoice": {
+            "operation_type": "invoice",
+            "customer_email": "test@example.com",
+            "customer_name": "Test Customer",
+            "amount": 199.99,
+            "description": "Test invoice"
+        },
+        "refund": {
+            "operation_type": "refund",
+            "payment_intent_id": "pi_test_123456",
+            "amount": 50.00,
+            "reason": "test_refund"
+        },
+        "quotation": {
+            "operation_type": "quotation",
+            "service_type": "express_delivery",
+            "distance_miles": 25.0,
+            "estimated_hours": 1.5,
+            "urgency": "normal"
+        }
+    }
+
+    input_data = test_data.get(operation, test_data["quotation"])
+
+    try:
+        result = await financial_agent.execute(input_data)
+
+        return {
+            "test": "success",
+            "operation": operation,
+            "agent_status": financial_agent.get_status(),
+            "result": result
+        }
+
+    except Exception as e:
+        return {
+            "test": "failed",
+            "operation": operation,
+            "error": str(e),
+            "agent_status": financial_agent.get_status()
         }
