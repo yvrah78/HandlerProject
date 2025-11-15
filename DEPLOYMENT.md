@@ -80,12 +80,15 @@ Free
 
 Click en "Advanced" y agrega estas variables:
 
+**VARIABLES BÁSICAS:**
 ```
 PYTHON_VERSION = 3.11.0
 ENVIRONMENT = production
 DEBUG = false
+```
 
-# Estas las puedes dejar vacías por ahora (para desarrollo):
+**API KEYS (vacías por ahora para desarrollo):**
+```
 ANTHROPIC_API_KEY =
 TWILIO_ACCOUNT_SID =
 TWILIO_AUTH_TOKEN =
@@ -94,33 +97,259 @@ STRIPE_SECRET_KEY =
 GOOGLE_MAPS_API_KEY =
 ```
 
-**IMPORTANTE:** Para DATABASE_URL y REDIS_URL, sigue estos pasos:
+---
 
-#### 2.4.1 Crear PostgreSQL Database:
-1. Ve a Dashboard → Click "New +" → "PostgreSQL"
-2. Nombre: `project-handler-db`
-3. Database Name: `project_handler`
-4. Plan: **Free**
-5. Click "Create Database"
-6. Espera a que esté listo (1-2 minutos)
-7. Copia la "Internal Database URL"
-8. Vuelve a tu Web Service → Environment → Agrega:
-   ```
-   DATABASE_URL = (pega la URL que copiaste)
-   ```
+#### ✅ GUÍA PASO A PASO: Configurar Variables de Entorno
 
-#### 2.4.2 Crear Redis Instance:
-1. Ve a Dashboard → Click "New +" → "Redis"
-2. Nombre: `project-handler-redis`
-3. Plan: **Free**
-4. Max Memory Policy: `noeviction`
-5. Click "Create Redis"
-6. Espera a que esté listo (1-2 minutos)
-7. Copia la "Internal Redis URL"
-8. Vuelve a tu Web Service → Environment → Agrega:
-   ```
-   REDIS_URL = (pega la URL que copiaste)
-   ```
+**Ubicación del botón "Advanced":**
+- Está ubicado justo DEBAJO de "Instance Type: Free"
+- ANTES del botón azul "Create Web Service"
+- Es un texto que dice "Advanced" (puede tener un ícono de flecha ▼)
+- Si no lo ves, scroll hacia abajo
+
+**Después de hacer click en "Advanced":**
+
+Se expandirá una sección grande con estas opciones:
+```
+┌─────────────────────────────────────┐
+│ ▼ Advanced                          │
+├─────────────────────────────────────┤
+│ 🔹 Environment Variables            │
+│ 🔹 Secret Files                     │
+│ 🔹 Disk                             │
+│ 🔹 Docker                           │
+│ 🔹 Health Check Path                │
+│ 🔹 Auto-Deploy                      │
+└─────────────────────────────────────┘
+```
+
+**Haz click en "Environment Variables"** (la primera opción)
+
+---
+
+#### 📝 AGREGAR VARIABLES - PASO A PASO:
+
+**PASO 1:** En "Environment Variables", busca el botón "+ Add Environment Variable"
+
+**PASO 2:** Aparecerán dos campos:
+```
+Key:   [___________________]
+Value: [___________________]
+       [x Remove]
+```
+
+**PASO 3:** Agrega las variables UNA POR UNA haciendo click en "+ Add Environment Variable" cada vez:
+
+**Variable 1:**
+```
+Key:   PYTHON_VERSION
+Value: 3.11.0
+```
+
+**Variable 2:**
+```
+Key:   ENVIRONMENT
+Value: production
+```
+
+**Variable 3:**
+```
+Key:   DEBUG
+Value: false
+```
+
+**Variable 4:**
+```
+Key:   ANTHROPIC_API_KEY
+Value: (déjalo VACÍO)
+```
+
+**Variable 5:**
+```
+Key:   TWILIO_ACCOUNT_SID
+Value: (vacío)
+```
+
+**Variable 6:**
+```
+Key:   TWILIO_AUTH_TOKEN
+Value: (vacío)
+```
+
+**Variable 7:**
+```
+Key:   SENDGRID_API_KEY
+Value: (vacío)
+```
+
+**Variable 8:**
+```
+Key:   STRIPE_SECRET_KEY
+Value: (vacío)
+```
+
+**Variable 9:**
+```
+Key:   GOOGLE_MAPS_API_KEY
+Value: (vacío)
+```
+
+---
+
+#### ⚠️ IMPORTANTE: No agregues DATABASE_URL ni REDIS_URL todavía
+
+**Orden correcto:**
+1. ✅ Agregar las variables de arriba
+2. ❌ NO crear el Web Service todavía
+3. ➡️ Ir al PASO 2.4.1 (crear PostgreSQL primero)
+4. ➡️ Ir al PASO 2.4.2 (crear Redis después)
+5. ➡️ Volver y agregar DATABASE_URL y REDIS_URL
+6. ✅ ENTONCES crear el Web Service
+
+---
+
+#### 🗄️ PASO 2.4.1 - Crear PostgreSQL (BASE DE DATOS)
+
+**EN UNA NUEVA PESTAÑA:**
+
+1. Ve al Dashboard de Render: https://dashboard.render.com
+
+2. Haz click en el botón azul **"New +"** (superior derecha)
+
+3. Selecciona **"PostgreSQL"** del menú
+
+4. Llena los campos:
+```
+Name: project-handler-db
+Database: project_handler
+User: (déjalo automático)
+Region: Oregon (misma que el Web Service)
+PostgreSQL Version: 16 (o la más reciente)
+Instance Type: Free
+```
+
+5. Haz click en **"Create Database"**
+
+6. Espera 1-2 minutos hasta que veas "Available" en verde
+
+**COPIAR LA URL:**
+
+7. En la página de la base de datos, busca la sección **"Connections"**
+
+8. Busca el campo:
+```
+Internal Database URL
+postgresql://project_handler_user:xxxxxxxxxxxx@dpg-xxxxx/project_handler
+```
+
+9. ⚠️ **IMPORTANTE:** Copia la "Internal Database URL", NO la "External"
+
+10. Haz click en el ícono **"Copy"** (📋) al lado
+
+**VOLVER AL WEB SERVICE:**
+
+11. Vuelve a la pestaña del Web Service
+
+12. En "Environment Variables", haz click en "+ Add Environment Variable"
+
+13. Agrega:
+```
+Key:   DATABASE_URL
+Value: (pega la URL que copiaste - debe empezar con postgresql://)
+```
+
+---
+
+#### 🔴 PASO 2.4.2 - Crear Redis (CACHE)
+
+**EN UNA NUEVA PESTAÑA:**
+
+1. Ve al Dashboard de Render: https://dashboard.render.com
+
+2. Haz click en **"New +"** (botón azul superior derecha)
+
+3. Selecciona **"Redis"** del menú
+
+4. Llena los campos:
+```
+Name: project-handler-redis
+Region: Oregon (misma que el Web Service)
+Maxmemory Policy: noeviction
+Plan: Free
+```
+
+5. Haz click en **"Create Redis"**
+
+6. Espera 1-2 minutos hasta que veas "Available" en verde
+
+**COPIAR LA URL:**
+
+7. En la página de Redis, busca la sección **"Connections"**
+
+8. Busca:
+```
+Internal Redis URL
+redis://red-xxxxx:6379
+```
+
+9. ⚠️ **IMPORTANTE:** Copia la "Internal Redis URL", NO la "External"
+
+10. Haz click en el ícono **"Copy"** (📋)
+
+**VOLVER AL WEB SERVICE:**
+
+11. Vuelve a la pestaña del Web Service
+
+12. Haz click en "+ Add Environment Variable"
+
+13. Agrega:
+```
+Key:   REDIS_URL
+Value: (pega la URL que copiaste - debe empezar con redis://)
+```
+
+---
+
+#### ✅ VERIFICACIÓN FINAL
+
+Ahora deberías tener TODAS estas variables:
+
+```
+✅ PYTHON_VERSION = 3.11.0
+✅ ENVIRONMENT = production
+✅ DEBUG = false
+✅ ANTHROPIC_API_KEY = (vacío)
+✅ TWILIO_ACCOUNT_SID = (vacío)
+✅ TWILIO_AUTH_TOKEN = (vacío)
+✅ SENDGRID_API_KEY = (vacío)
+✅ STRIPE_SECRET_KEY = (vacío)
+✅ GOOGLE_MAPS_API_KEY = (vacío)
+✅ DATABASE_URL = postgresql://project_handler_user:...
+✅ REDIS_URL = redis://red-xxxxx:6379
+```
+
+---
+
+#### 🚀 CREAR EL WEB SERVICE
+
+**DESPUÉS de tener TODAS las variables configuradas:**
+
+1. Scroll hacia abajo
+2. Busca el botón azul grande **"Create Web Service"**
+3. Haz click
+4. Espera 3-5 minutos mientras Render despliega tu aplicación
+
+Verás logs scrolleando. Cuando termine:
+```
+==> Build successful 🎉
+==> Deploying...
+==> Your service is live 🎉
+```
+
+Tu API estará disponible en:
+```
+https://project-handler-api.onrender.com
+```
 
 ### 2.5 Deploy!
 
